@@ -20,7 +20,12 @@ namespace DnrGps_Wkt
 
         public static IGeometry ToGeometry(this string wkt)
         {
-            return BuildGeometry(wkt);
+            return BuildGeometry(wkt, CreateDefaultSpatialReference());
+        }
+
+        public static IGeometry ToGeometry(this string wkt, ISpatialReference spatialReference)
+        {
+            return BuildGeometry(wkt, spatialReference);
         }
 
 
@@ -135,7 +140,7 @@ namespace DnrGps_Wkt
 
         #region Private methods for IGeometry construction
 
-        private static IGeometry BuildGeometry(string s)
+        private static IGeometry BuildGeometry(string s, ISpatialReference spatialReference)
         {
             var wkt = new WktText(s);
 
@@ -144,42 +149,44 @@ namespace DnrGps_Wkt
                 case WktType.None:
                     return null;
                 case WktType.Point:
-                    return BuildPoint(wkt);
+                    return BuildPoint(wkt, spatialReference);
                 case WktType.LineString:
-                    return BuildPolyline(wkt);
+                    return BuildPolyline(wkt, spatialReference);
                 case WktType.Polygon:
-                    return BuildPolygon(wkt);
+                    return BuildPolygon(wkt, spatialReference);
                 case WktType.Triangle:
-                    return BuildPolygon(wkt);
+                    return BuildPolygon(wkt, spatialReference);
                 case WktType.PolyhedralSurface:
-                    return BuildMultiPatch(wkt);
+                    return BuildMultiPatch(wkt, spatialReference);
                 case WktType.Tin:
-                    return BuildMultiPolygon(wkt);
+                    return BuildMultiPolygon(wkt, spatialReference);
                 case WktType.MultiPoint:
-                    return BuildMultiPoint(wkt);
+                    return BuildMultiPoint(wkt, spatialReference);
                 case WktType.MultiLineString:
-                    return BuildMultiPolyline(wkt);
+                    return BuildMultiPolyline(wkt, spatialReference);
                 case WktType.MultiPolygon:
-                    return BuildMultiPolygon(wkt);
+                    return BuildMultiPolygon(wkt, spatialReference);
                 case WktType.GeometryCollection:
-                    return BuildGeometryCollection(wkt);
+                    return BuildGeometryCollection(wkt, spatialReference);
                 default:
                     throw new ArgumentOutOfRangeException("s", "Unsupported geometry type: " + wkt.Type);
             }
         }
 
-        private static IGeometry BuildPoint(WktText wkt)
+        private static IGeometry BuildPoint(WktText wkt, ISpatialReference spatialReference)
         {
-            return BuildPoint(wkt.Token, wkt);
+            return BuildPoint(wkt.Token, wkt, spatialReference);
         }
 
-        private static IGeometry BuildMultiPoint(WktText wkt)
+        private static IGeometry BuildMultiPoint(WktText wkt, ISpatialReference spatialReference)
         {
             var multiPoint = (IPointCollection)new MultipointClass();
+            if (spatialReference != null)
+                ((IGeometry)multiPoint).SpatialReference = spatialReference;
 
             foreach (var point in wkt.Token.Tokens)
             {
-                multiPoint.AddPoint(BuildPoint(point, wkt));
+                multiPoint.AddPoint(BuildPoint(point, wkt, spatialReference));
             }
             ((ITopologicalOperator)multiPoint).Simplify();
             var geometry = multiPoint as IGeometry;
@@ -187,11 +194,13 @@ namespace DnrGps_Wkt
             return geometry;
         }
 
-        private static IGeometry BuildPolyline(WktText wkt)
+        private static IGeometry BuildPolyline(WktText wkt, ISpatialReference spatialReference)
         {
             var multiPath = (IGeometryCollection)new PolylineClass();
+            if (spatialReference != null)
+                ((IGeometry)multiPath).SpatialReference = spatialReference;
 
-            var path = BuildPath(wkt.Token, wkt);
+            var path = BuildPath(wkt.Token, wkt, spatialReference);
             ((ITopologicalOperator)multiPath).Simplify();
             multiPath.AddGeometry(path);
             var geometry = multiPath as IGeometry;
@@ -199,13 +208,15 @@ namespace DnrGps_Wkt
             return geometry;
         }
 
-        private static IGeometry BuildMultiPolyline(WktText wkt)
+        private static IGeometry BuildMultiPolyline(WktText wkt, ISpatialReference spatialReference)
         {
             var multiPath = (IGeometryCollection)new PolylineClass();
+            if (spatialReference != null)
+                ((IGeometry)multiPath).SpatialReference = spatialReference;
 
             foreach (var lineString in wkt.Token.Tokens)
             {
-                var path = BuildPath(lineString, wkt);
+                var path = BuildPath(lineString, wkt, spatialReference);
                 multiPath.AddGeometry(path);
             }
             ((ITopologicalOperator)multiPath).Simplify();
@@ -214,13 +225,15 @@ namespace DnrGps_Wkt
             return geometry;
         }
 
-        private static IGeometry BuildPolygon(WktText wkt)
+        private static IGeometry BuildPolygon(WktText wkt, ISpatialReference spatialReference)
         {
             var multiRing = (IGeometryCollection)new PolygonClass();
+            if (spatialReference != null)
+                ((IGeometry)multiRing).SpatialReference = spatialReference;
 
             foreach (var ringString in wkt.Token.Tokens)
             {
-                var ring = BuildRing(ringString, wkt);
+                var ring = BuildRing(ringString, wkt, spatialReference);
                 multiRing.AddGeometry(ring);
             }
             ((ITopologicalOperator)multiRing).Simplify();
@@ -229,15 +242,17 @@ namespace DnrGps_Wkt
             return geometry;
         }
 
-        private static IGeometry BuildMultiPolygon(WktText wkt)
+        private static IGeometry BuildMultiPolygon(WktText wkt, ISpatialReference spatialReference)
         {
             var multiRing = (IGeometryCollection)new PolygonClass();
+            if (spatialReference != null)
+                ((IGeometry)multiRing).SpatialReference = spatialReference;
 
             foreach (var polygonString in wkt.Token.Tokens)
             {
                 foreach (var ringString in polygonString.Tokens)
                 {
-                    var ring = BuildRing(ringString, wkt);
+                    var ring = BuildRing(ringString, wkt, spatialReference);
                     multiRing.AddGeometry(ring);
                 }
             }
@@ -247,16 +262,18 @@ namespace DnrGps_Wkt
             return geometry;
         }
 
-        private static IGeometry BuildMultiPatch(WktText wkt)
+        private static IGeometry BuildMultiPatch(WktText wkt, ISpatialReference spatialReference)
         {
             var multiPatch = (IGeometryCollection)new MultiPatchClass();
+            if (spatialReference != null)
+                ((IGeometry)multiPatch).SpatialReference = spatialReference;
 
             foreach (var polygonString in wkt.Token.Tokens)
             {
                 bool isOuter = true;
                 foreach (var ringString in polygonString.Tokens)
                 {
-                    var ring = BuildRing(ringString, wkt);
+                    var ring = BuildRing(ringString, wkt, spatialReference);
                     multiPatch.AddGeometry(ring);
                     ((IMultiPatch)multiPatch).PutRingType(ring, isOuter
                                                                   ? esriMultiPatchRingType.esriMultiPatchOuterRing
@@ -270,13 +287,15 @@ namespace DnrGps_Wkt
             return geometry;
         }
 
-        private static IGeometry BuildGeometryCollection(WktText wkt)
+        private static IGeometry BuildGeometryCollection(WktText wkt, ISpatialReference spatialReference)
         {
             var geometryBag = (IGeometryCollection)new GeometryBagClass();
+            if (spatialReference != null)
+                ((IGeometryBag)geometryBag).SpatialReference = spatialReference;
 
             foreach (var geomToken in wkt.Token.Tokens)
             {
-                var geom = BuildGeometry(geomToken.ToString());
+                var geom = BuildGeometry(geomToken.ToString(), spatialReference);
                 geometryBag.AddGeometry(geom);
             }
             var geometry = geometryBag as IGeometry;
@@ -284,32 +303,36 @@ namespace DnrGps_Wkt
             return geometry;
         }
 
-
-
-        private static IPath BuildPath(WktToken token, WktText wkt)
+        private static IPath BuildPath(WktToken token, WktText wkt, ISpatialReference spatialReference)
         {
             var path = (IPointCollection)new PathClass();
+            if (spatialReference != null)
+                ((IGeometry)path).SpatialReference = spatialReference;
+
             foreach (var point in token.Tokens)
             {
-                path.AddPoint(BuildPoint(point, wkt));
+                path.AddPoint(BuildPoint(point, wkt, spatialReference));
             }
             var geometry = path as IGeometry;
             MakeZmAware(geometry, wkt.HasZ, wkt.HasM);
             return (IPath)path;
         }
 
-        private static IRing BuildRing(WktToken token, WktText wkt)
+        private static IRing BuildRing(WktToken token, WktText wkt, ISpatialReference spatialReference)
         {
             var ring = (IPointCollection)new RingClass();
+            if (spatialReference != null)
+                ((IGeometry)ring).SpatialReference = spatialReference;
+
             foreach (var point in token.Tokens)
             {
-                ring.AddPoint(BuildPoint(point, wkt));
+                ring.AddPoint(BuildPoint(point, wkt, spatialReference));
             }
             MakeZmAware((IGeometry)ring, wkt.HasZ, wkt.HasM);
             return (IRing)ring;
         }
 
-        private static IPoint BuildPoint(WktToken token, WktText wkt)
+        private static IPoint BuildPoint(WktToken token, WktText wkt, ISpatialReference spatialReference)
         {
             var coordinates = token.Coords.ToArray();
 
@@ -324,6 +347,8 @@ namespace DnrGps_Wkt
                 throw new ArgumentException("Mal-formed WKT, wrong number of elements, expecting x y z m");
 
             var point = (IPoint)new PointClass();
+            if (spatialReference != null)
+                point.SpatialReference = spatialReference;
 
             point.PutCoords(coordinates[0], coordinates[1]);
 
@@ -344,6 +369,19 @@ namespace DnrGps_Wkt
                 ((IZAware)geometry).ZAware = true;
             if (hasM)
                 ((IMAware)geometry).MAware = true;
+        }
+
+        private static ISpatialReference CreateDefaultSpatialReference()
+        {
+        	ISpatialReferenceFactory spatialReferenceFactory = new SpatialReferenceEnvironmentClass();
+        	var spatialReference = (ISpatialReference)spatialReferenceFactory.CreateProjectedCoordinateSystem((int)esriSRProjCSType.esriSRProjCS_World_PlateCarree);
+        	var controlPrecision = spatialReference as IControlPrecision2;
+    		controlPrecision.IsHighPrecision = false;
+        	var spatialReferenceResolution = (ISpatialReferenceResolution)spatialReference;
+        	spatialReferenceResolution.ConstructFromHorizon();
+		    var spatialReferenceTolerance = (ISpatialReferenceTolerance)spatialReference;
+		    spatialReferenceTolerance.SetDefaultXYTolerance();
+		    return spatialReference;
         }
 
         #endregion
